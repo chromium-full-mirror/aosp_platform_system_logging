@@ -98,7 +98,7 @@ class Logcat {
     std::unique_ptr<std::regex> regex_;
     size_t max_count_ = 0;  // 0 means "infinite"
     size_t print_count_ = 0;
-    bool print_it_anyways_ = false;
+    bool print_it_anyway_ = false;
 
     // For PrintDividers()
     bool print_dividers_ = false;
@@ -215,7 +215,7 @@ void Logcat::ProcessBuffer(struct log_msg* buf) {
                      std::regex_search(entry.message, entry.message + entry.messageLen, *regex_);
 
         print_count_ += match;
-        if (match || print_it_anyways_) {
+        if (match || print_it_anyway_) {
             PrintDividers(buf->id(), print_dividers_);
 
             bytesWritten = android_log_printLogLine(logformat_.get(), output_fd_.get(), &entry);
@@ -632,7 +632,7 @@ int Logcat::Run(int argc, char** argv) {
                     break;
                 }
                 if (long_options[option_index].name == print_str) {
-                    print_it_anyways_ = true;
+                    print_it_anyway_ = true;
                     break;
                 }
                 if (long_options[option_index].name == debug_str) {
@@ -794,91 +794,6 @@ int Logcat::Run(int argc, char** argv) {
                 }
                 break;
 
-            case 'Q':
-#define LOGCAT_FILTER "androidboot.logcat="
-#define CONSOLE_PIPE_OPTION "androidboot.consolepipe="
-#define CONSOLE_OPTION "androidboot.console="
-#define QEMU_PROPERTY "ro.kernel.qemu"
-#define QEMU_CMDLINE "qemu.cmdline"
-                // This is a *hidden* option used to start a version of logcat
-                // in an emulated device only.  It basically looks for
-                // androidboot.logcat= on the kernel command line.  If
-                // something is found, it extracts a log filter and uses it to
-                // run the program. The logcat output will go to consolepipe if
-                // androiboot.consolepipe (e.g. qemu_pipe) is given, otherwise,
-                // it goes to androidboot.console (e.g. tty)
-                {
-                    // if not in emulator, exit quietly
-                    if (false == android::base::GetBoolProperty(QEMU_PROPERTY, false)) {
-                        return EXIT_SUCCESS;
-                    }
-
-                    std::string cmdline = android::base::GetProperty(QEMU_CMDLINE, "");
-                    if (cmdline.empty()) {
-                        android::base::ReadFileToString("/proc/cmdline", &cmdline);
-                    }
-
-                    const char* logcatFilter = strstr(cmdline.c_str(), LOGCAT_FILTER);
-                    // if nothing found or invalid filters, exit quietly
-                    if (!logcatFilter) {
-                        return EXIT_SUCCESS;
-                    }
-
-                    const char* p = logcatFilter + strlen(LOGCAT_FILTER);
-                    const char* q = strpbrk(p, " \t\n\r");
-                    if (!q) q = p + strlen(p);
-                    forceFilters = std::string(p, q);
-
-                    // redirect our output to the emulator console pipe or console
-                    const char* consolePipe =
-                        strstr(cmdline.c_str(), CONSOLE_PIPE_OPTION);
-                    const char* console =
-                        strstr(cmdline.c_str(), CONSOLE_OPTION);
-
-                    if (consolePipe) {
-                        p = consolePipe + strlen(CONSOLE_PIPE_OPTION);
-                    } else if (console) {
-                        p = console + strlen(CONSOLE_OPTION);
-                    } else {
-                        return EXIT_FAILURE;
-                    }
-
-                    q = strpbrk(p, " \t\n\r");
-                    int len = q ? q - p : strlen(p);
-                    std::string devname = "/dev/" + std::string(p, len);
-                    std::string pipePurpose("pipe:logcat");
-                    if (consolePipe) {
-                        // example: "qemu_pipe,pipe:logcat"
-                        // upon opening of /dev/qemu_pipe, the "pipe:logcat"
-                        // string with trailing '\0' should be written to the fd
-                        size_t pos = devname.find(',');
-                        if (pos != std::string::npos) {
-                            pipePurpose = devname.substr(pos + 1);
-                            devname = devname.substr(0, pos);
-                        }
-                    }
-
-                    fprintf(stderr, "logcat using %s\n", devname.c_str());
-
-                    int fd = open(devname.c_str(), O_WRONLY | O_CLOEXEC);
-                    if (fd < 0) {
-                        break;
-                    }
-
-                    if (consolePipe) {
-                        // need the trailing '\0'
-                        if (!WriteFully(fd, pipePurpose.c_str(), pipePurpose.size() + 1)) {
-                            close(fd);
-                            return EXIT_FAILURE;
-                        }
-                    }
-                    // close output and error channels, replace with console
-                    dup2(fd, output_fd_.get());
-                    dup2(fd, STDERR_FILENO);
-                    close(fd);
-                }
-                break;
-
             case 'S':
                 printStatistics = true;
                 break;
@@ -904,7 +819,7 @@ int Logcat::Run(int argc, char** argv) {
     if (max_count_ && got_t) {
         error(EXIT_FAILURE, 0, "Cannot use -m (--max-count) and -t together.");
     }
-    if (print_it_anyways_ && (!regex_ || !max_count_)) {
+    if (print_it_anyway_ && (!regex_ || !max_count_)) {
         // One day it would be nice if --print -v color and --regex <expr>
         // could play with each other and show regex highlighted content.
         fprintf(stderr,
@@ -912,7 +827,7 @@ int Logcat::Run(int argc, char** argv) {
                 "--print ignored, to be used in combination with\n"
                 "         "
                 "--regex <expr> and --max-count <N>\n");
-        print_it_anyways_ = false;
+        print_it_anyway_ = false;
     }
 
     // If no buffers are specified, default to using these buffers.

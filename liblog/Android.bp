@@ -14,6 +14,22 @@
 // limitations under the License.
 //
 
+package {
+    default_applicable_licenses: ["system_logging_liblog_license"],
+}
+
+// Added automatically by a large-scale-change
+license {
+    name: "system_logging_liblog_license",
+    visibility: [":__subpackages__"],
+    license_kinds: [
+        "SPDX-license-identifier-Apache-2.0",
+    ],
+    license_text: [
+        "NOTICE",
+    ],
+}
+
 liblog_sources = [
     "log_event_list.cpp",
     "log_event_write.cpp",
@@ -75,7 +91,10 @@ cc_library {
     vendor_ramdisk_available: true,
     recovery_available: true,
     native_bridge_supported: true,
-    llndk_stubs: "liblog.llndk",
+    llndk: {
+        symbol_file: "liblog.map.txt",
+        override_export_include_dirs: ["include_vndk"],
+    },
     srcs: liblog_sources,
 
     target: {
@@ -119,6 +138,7 @@ cc_library {
         "-Wall",
         "-Werror",
         "-Wextra",
+        "-Wexit-time-destructors",
         // This is what we want to do:
         //  liblog_cflags := $(shell \
         //   sed -n \
@@ -159,9 +179,30 @@ ndk_library {
     unversioned_until: "current",
 }
 
-llndk_library {
-    name: "liblog.llndk",
-    native_bridge_supported: true,
-    symbol_file: "liblog.map.txt",
-    export_include_dirs: ["include_vndk"],
+rust_bindgen {
+    name: "liblog_event_list_bindgen",
+    wrapper_src: "rust/liblog_wrapper.h",
+    crate_name: "log_event_list_bindgen",
+    source_stem: "bindings",
+
+    bindgen_flags: [
+        "--size_t-is-usize",
+        "--allowlist-function=create_android_logger",
+        "--allowlist-function=android_log_destroy",
+        "--allowlist-function=android_log_write_int32",
+        "--allowlist-function=android_log_write_string8_len",
+        "--allowlist-function=android_log_write_list",
+        "--allowlist-function=__android_log_security",
+        "--allowlist-type=log_id",
+    ],
+}
+
+rust_test {
+    name: "liblog_event_list_bindgen_test",
+    srcs: [":liblog_event_list_bindgen"],
+    crate_name: "log_event_list_bindgen_test",
+    test_suites: ["general-tests"],
+    auto_gen_config: true,
+    clippy_lints: "none",
+    lints: "none",
 }
